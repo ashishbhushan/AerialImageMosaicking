@@ -3,10 +3,10 @@
 import cv2
 import numpy as np
 
-MIN_INLIERS = 10  # reject homographies with fewer inliers than this
+MIN_INLIERS = 10  # default minimum inliers — can be overridden per dataset
 
 
-def _compute_H(kps_src: list, kps_dst: list, matches: list, ransac_thresh: float):
+def _compute_H(kps_src: list, kps_dst: list, matches: list, ransac_thresh: float, min_inliers: int = MIN_INLIERS):
     """Compute H (dst->src) from a match list. Returns (H, inlier_count) or (None, 0)."""
     if len(matches) < 4:
         return None, 0
@@ -14,11 +14,11 @@ def _compute_H(kps_src: list, kps_dst: list, matches: list, ransac_thresh: float
     dst_pts = np.float32([kps_dst[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
     H, mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC, ransac_thresh)
     inliers = int(mask.sum()) if mask is not None else 0
-    return (H, mask) if (H is not None and inliers >= MIN_INLIERS) else (None, inliers)
+    return (H, mask) if (H is not None and inliers >= min_inliers) else (None, inliers)
 
 
 def estimate_homographies(
-    all_kps: list, matches_list: list, ransac_thresh: float = 5.0
+    all_kps: list, matches_list: list, ransac_thresh: float = 5.0, min_inliers: int = MIN_INLIERS
 ) -> tuple[list, list]:
     """Compute pairwise homographies H[i] mapping image i+1 -> image i via RANSAC.
 
@@ -29,7 +29,7 @@ def estimate_homographies(
     H_pairs, masks = [], []
 
     for i, matches in enumerate(matches_list):
-        H, result = _compute_H(all_kps[i], all_kps[i + 1], matches, ransac_thresh)
+        H, result = _compute_H(all_kps[i], all_kps[i + 1], matches, ransac_thresh, min_inliers)
         if isinstance(result, int):
             inliers, mask = result, None
         else:
@@ -38,7 +38,7 @@ def estimate_homographies(
 
         print(f"  Pair ({i},{i+1}): {len(matches)} matches -> {inliers} inliers", end="")
         if H is None:
-            print(f" -> rejected (< {MIN_INLIERS})")
+            print(f" -> rejected (< {min_inliers})")
         else:
             print()
 
@@ -79,7 +79,7 @@ def chain_homographies(H_pairs: list, ref_idx: int = 0) -> list:
 
 def build_chain_with_fallback(
     all_kps: list, all_descs: list, max_skip: int = 3,
-    ratio: float = 0.75, ransac_thresh: float = 5.0
+    ratio: float = 0.75, ransac_thresh: float = 5.0, min_inliers: int = MIN_INLIERS
 ) -> tuple[list, list, list]:
     """Build homography chain with skip-N bridging for datasets with strip transitions.
 
@@ -98,7 +98,7 @@ def build_chain_with_fallback(
     # Always compute consecutive matches for visualization purposes
     print("  Computing consecutive matches (for visualization)...")
     matches_list = match_consecutive_pairs(all_descs, ratio)
-    H_pairs_consec, masks_consec = estimate_homographies(all_kps, matches_list, ransac_thresh)
+    H_pairs_consec, masks_consec = estimate_homographies(all_kps, matches_list, ransac_thresh, min_inliers)
 
     # Now build the chain with fallback bridging
     H_chain = [None] * n
@@ -122,7 +122,7 @@ def build_chain_with_fallback(
                 # Try a direct match between src and j
                 print(f"  Bridging: trying pair ({src},{j})...")
                 matches_bridge = match_pair(all_descs, src, j, ratio)
-                H_bridge, result = _compute_H(all_kps[src], all_kps[j], matches_bridge, ransac_thresh)
+                H_bridge, result = _compute_H(all_kps[src], all_kps[j], matches_bridge, ransac_thresh, min_inliers)
                 if isinstance(result, int):
                     inliers = result
                 else:

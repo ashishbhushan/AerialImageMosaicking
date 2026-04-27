@@ -25,25 +25,31 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 #   max_skip  – how far back to bridge when a consecutive pair fails
 _DATASET_DEFAULTS = {
     "Aukerman (fields)": {
-        "dir":       str(_PROJECT_ROOT / "data" / "odm_data_aukerman" / "images"),
-        "start":     2,
-        "max_n":     25,
-        "default_n": 15,
-        "max_skip":  3,
+        "dir":          str(_PROJECT_ROOT / "data" / "odm_data_aukerman" / "images"),
+        "start":        2,
+        "max_n":        25,
+        "default_n":    15,
+        "max_skip":     3,
+        "ransac_thresh": 5.0,
+        "min_inliers":  10,
     },
     "Bellus (urban)": {
-        "dir":       str(_PROJECT_ROOT / "data" / "odm_data_bellus" / "images"),
-        "start":     0,
-        "max_n":     20,
-        "default_n": 12,
-        "max_skip":  3,
+        "dir":          str(_PROJECT_ROOT / "data" / "odm_data_bellus" / "images"),
+        "start":        0,
+        "max_n":        20,
+        "default_n":    12,
+        "max_skip":     3,
+        "ransac_thresh": 8.0,  # looser — repetitive tree texture causes noisy matches
+        "min_inliers":  6,
     },
     "Pacifica (coastal)": {
-        "dir":       str(_PROJECT_ROOT / "data" / "odm_data_pacifica" / "images"),
-        "start":     0,
-        "max_n":     12,
-        "default_n": 12,
-        "max_skip":  11,  # images are out of sequential order — look at all pairs
+        "dir":          str(_PROJECT_ROOT / "data" / "odm_data_pacifica" / "images"),
+        "start":        0,
+        "max_n":        12,
+        "default_n":    12,
+        "max_skip":     11,    # images are out of sequential order — look at all pairs
+        "ransac_thresh": 5.0,
+        "min_inliers":  10,
     },
 }
 
@@ -80,7 +86,8 @@ def run_pipeline_ui(n_images: int, dataset: str):
 
     # Stages 3-4: fallback bridging handles both strip transitions and out-of-order datasets
     H_chain, matches_list, masks = build_chain_with_fallback(
-        all_kps, all_descs, max_skip=max_skip
+        all_kps, all_descs, max_skip=max_skip,
+        ransac_thresh=cfg["ransac_thresh"], min_inliers=cfg["min_inliers"],
     )
 
     # Panel A: SIFT keypoints on first image

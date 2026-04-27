@@ -24,25 +24,31 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 DATASETS = {
     "aukerman": {
-        "dir":      str(ROOT / "data" / "odm_data_aukerman" / "images"),
-        "start":    2,
-        "n":        6,
-        "max_skip": 1,
-        "label":    "Aukerman (fields)",
+        "dir":          str(ROOT / "data" / "odm_data_aukerman" / "images"),
+        "start":        2,    # skip first 2 (missing frame gap)
+        "n":            6,
+        "max_skip":     1,
+        "ransac_thresh": 5.0,
+        "min_inliers":  10,
+        "label":        "Aukerman (fields)",
     },
     "bellus": {
-        "dir":      str(ROOT / "data" / "odm_data_bellus" / "images"),
-        "start":    0,
-        "n":        6,
-        "max_skip": 1,
-        "label":    "Bellus (urban)",
+        "dir":          str(ROOT / "data" / "odm_data_bellus" / "images"),
+        "start":        12,   # clean strip — matches main.py config
+        "n":            8,
+        "max_skip":     1,
+        "ransac_thresh": 8.0, # looser threshold for repetitive tree texture
+        "min_inliers":  6,
+        "label":        "Bellus (urban)",
     },
     "pacifica": {
-        "dir":      str(ROOT / "data" / "odm_data_pacifica" / "images"),
-        "start":    0,
-        "n":        12,
-        "max_skip": 11,
-        "label":    "Pacifica (coastal)",
+        "dir":          str(ROOT / "data" / "odm_data_pacifica" / "images"),
+        "start":        0,
+        "n":            12,
+        "max_skip":     11,
+        "ransac_thresh": 5.0,
+        "min_inliers":  10,
+        "label":        "Pacifica (coastal)",
     },
 }
 
@@ -146,13 +152,16 @@ def run_dataset(name, cfg):
 
     # ── Stage 4 ──────────────────────────────────────────────
     print("  [Stage 4] Homography...")
+    ransac_thresh = cfg["ransac_thresh"]
+    min_inliers   = cfg["min_inliers"]
     if use_fallback:
         H_chain, matches_list, masks = build_chain_with_fallback(
-            all_kps, all_descs, max_skip=cfg["max_skip"])
-        H_pairs = [None] * (len(color_imgs) - 1)  # not used for viz below
+            all_kps, all_descs, max_skip=cfg["max_skip"],
+            ransac_thresh=ransac_thresh, min_inliers=min_inliers)
+        H_pairs = [None] * (len(color_imgs) - 1)
     else:
-        H_pairs, masks = estimate_homographies(all_kps, matches_list)
-        H_chain = chain_homographies(H_pairs)
+        H_pairs, masks = estimate_homographies(all_kps, matches_list, ransac_thresh, min_inliers)
+        H_chain = chain_homographies(H_pairs, ref_idx=len(color_imgs) // 2)
 
     n_pairs = len(matches_list)
     fig, axes = plt.subplots(n_pairs, 2, figsize=(14, 4 * n_pairs))

@@ -20,14 +20,18 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 DATASETS = {
     "aukerman": {
-        "dir":   str(_PROJECT_ROOT / "data" / "odm_data_aukerman" / "images"),
-        "start": 2,   # skip first 2 (DSC00231 is missing, causing a gap)
-        "n":     20,
+        "dir":          str(_PROJECT_ROOT / "data" / "odm_data_aukerman" / "images"),
+        "start":        2,    # skip first 2 (DSC00231 is missing, causing a gap)
+        "n":            20,
+        "ransac_thresh": 5.0,
+        "min_inliers":  10,
     },
     "bellus": {
-        "dir":   str(_PROJECT_ROOT / "data" / "odm_data_bellus" / "images"),
-        "start": 12,  # start at the clean strip (images 12-19 have strong overlap)
-        "n":     8,
+        "dir":          str(_PROJECT_ROOT / "data" / "odm_data_bellus" / "images"),
+        "start":        12,   # start at the clean strip (images 12-19 have strong overlap)
+        "n":            8,
+        "ransac_thresh": 8.0, # looser threshold — repetitive tree texture means noisier matches
+        "min_inliers":  6,
     },
 }
 
@@ -73,8 +77,10 @@ def run_pipeline(data_dir=None, n=None, start=None, max_width=MAX_WIDTH):
     # Stage 4: Homography
     print("\n[Stage 4] Estimating homographies...")
     t0 = time.time()
-    H_pairs, masks = estimate_homographies(all_kps, matches_list)
-    H_chain = chain_homographies(H_pairs)
+    ransac_thresh = cfg.get("ransac_thresh", 5.0)
+    min_inliers   = cfg.get("min_inliers", 10)
+    H_pairs, masks = estimate_homographies(all_kps, matches_list, ransac_thresh, min_inliers)
+    H_chain = chain_homographies(H_pairs, ref_idx=len(color_imgs) // 2)
     timings["4_homography"] = time.time() - t0
 
     # Evaluation: inlier ratios
