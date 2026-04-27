@@ -20,6 +20,19 @@ def match_pair(all_descs: list, i: int, j: int, ratio: float = 0.75) -> list:
     return _ratio_test(raw, ratio)
 
 
+def count_raw_matches(all_descs: list) -> list[int]:
+    """Count raw matches (before ratio test) for each consecutive pair."""
+    flann = cv2.FlannBasedMatcher(_FLANN_PARAMS, _SEARCH_PARAMS)
+    counts = []
+    for i in range(len(all_descs) - 1):
+        if all_descs[i] is None or all_descs[i + 1] is None:
+            counts.append(0)
+            continue
+        raw = flann.knnMatch(all_descs[i], all_descs[i + 1], k=2)
+        counts.append(len(raw))
+    return counts
+
+
 def match_consecutive_pairs(all_descs: list, ratio: float = 0.75) -> list[list]:
     """Match descriptors between each consecutive image pair.
 

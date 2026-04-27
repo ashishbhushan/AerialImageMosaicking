@@ -9,8 +9,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from loader import load_images
 from features import detect_and_describe
-from matching import match_consecutive_pairs
-from homography import estimate_homographies, chain_homographies
+from matching import match_consecutive_pairs, count_raw_matches
+from homography import estimate_homographies, chain_homographies, compute_reprojection_errors
 from warping import warp_images
 from blending import blend_images
 from visualize import generate_all_figures
@@ -71,6 +71,7 @@ def run_pipeline(data_dir=None, n=None, start=None, max_width=MAX_WIDTH):
     # Stage 3: Matching
     print("\n[Stage 3] Matching features...")
     t0 = time.time()
+    raw_counts   = count_raw_matches(all_descs)
     matches_list = match_consecutive_pairs(all_descs)
     timings["3_match"] = time.time() - t0
 
@@ -81,13 +82,15 @@ def run_pipeline(data_dir=None, n=None, start=None, max_width=MAX_WIDTH):
     min_inliers   = cfg.get("min_inliers", 10)
     H_pairs, masks = estimate_homographies(all_kps, matches_list, ransac_thresh, min_inliers)
     H_chain = chain_homographies(H_pairs, ref_idx=len(color_imgs) // 2)
+    reproj_errors = compute_reprojection_errors(all_kps, matches_list, masks, H_pairs)
     timings["4_homography"] = time.time() - t0
 
-    # Evaluation: inlier ratios
-    for i, (m_list, mask) in enumerate(zip(matches_list, masks)):
+    # Evaluation: inlier ratios + reprojection errors
+    for i, (m_list, mask, re) in enumerate(zip(matches_list, masks, reproj_errors)):
         if mask is not None:
             ratio = mask.sum() / max(len(m_list), 1)
-            print(f"  Pair ({i},{i+1}): inlier ratio {ratio:.2f}")
+            re_str = f"{re:.2f}px" if not __import__("math").isnan(re) else "—"
+            print(f"  Pair ({i},{i+1}): inlier ratio {ratio:.2f} | reproj error {re_str}")
 
     # Stage 5: Warping
     print("\n[Stage 5] Warping images...")
@@ -107,7 +110,10 @@ def run_pipeline(data_dir=None, n=None, start=None, max_width=MAX_WIDTH):
     generate_all_figures(
         color_imgs, all_kps, all_descs,
         matches_list, masks,
-        warped_imgs, canvas, blended
+        warped_imgs, canvas, blended,
+        raw_counts=raw_counts,
+        reproj_errors=reproj_errors,
+        timings=timings,
     )
     timings["7_visualize"] = time.time() - t0
 
